@@ -8,7 +8,9 @@
     "test": "mocha tests --recursive --timeout 5000",
     "test-single": "mocha",
     "shell": "node --experimental-repl-await ./shell.js",
-    "generate-docs": "npx jsdoc --configure .jsdoc.json --verbose"
+    "generate-docs": "npx jsdoc --configure .jsdoc.json --verbose",
+    "sismo-realtime": "node firebase-sismo-realtime.js",
+    "firebase-listener": "node firebase-listener.js"
   },
   "repository": {
     "type": "git",
@@ -33,6 +35,7 @@
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "express-session": "^1.18.2",
+    "firebase": "^10.14.1",
     "fluent-ffmpeg": "2.1.3",
     "mime": "^3.0.0",
     "multer": "^2.0.2",
