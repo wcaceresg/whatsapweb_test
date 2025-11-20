@@ -65,29 +65,14 @@ if (sessionExists) {
 }
 
 const client = new Client({
+    puppeteer: {
+      executablePath: '/usr/bin/brave-browser-stable',
+    },
     authStrategy: new LocalAuth({
       clientId: "client-one"
     }),
     puppeteer: {
-      // Configuración para servidor Linux/VPS
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu',
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins,site-per-process'
-      ],
-      // Si tienes Chrome/Chromium instalado en el sistema, descomenta y ajusta la ruta:
-      // executablePath: '/usr/bin/chromium-browser',
-       //setChromePath('/usr/bin/google-chrome-stable'); //
-      // O si tienes Google Chrome:
-       executablePath: '/usr/bin/google-chrome-stable',
-      // Si no especificas executablePath, Puppeteer usará el Chromium que viene con él
+     // headless: false,
     }
   });
 
