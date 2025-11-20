@@ -30,6 +30,8 @@ if (!fs.existsSync(logsDir)) {
 
 // Variable para almacenar el último sismo
 let ultimoSismo = null;
+// Bandera para saber si ya terminó de cargar el historial inicial
+let historialCargado = false;
 
 // Función para escribir en el log
 function writeToLog(message, eventType = 'INFO') {
@@ -99,39 +101,57 @@ ${separador}
   writeToLog(`\nDatos completos del sismo (JSON):\n${jsonData}\n`, 'SISMO_JSON');
 }
 
-// Función para obtener el último sismo actual
-async function obtenerUltimoSismo() {
+// Función para obtener el último sismo actual y cargar historial
+async function cargarHistorialYUltimoSismo() {
   try {
     const messagesRef = ref(database, '/messages');
-    const queryRef = query(messagesRef, orderByChild('categoria'), limitToLast(1));
     
-    const snapshot = await get(queryRef);
+    writeToLog('📥 Cargando historial de sismos...', 'SYSTEM');
+    
+    // Obtener todos los sismos para encontrar el último
+    const snapshot = await get(messagesRef);
     
     if (snapshot.exists()) {
       const data = snapshot.val();
       const keys = Object.keys(data);
       
       if (keys.length > 0) {
-        const lastKey = keys[0];
-        const lastSismo = data[lastKey];
+        // Encontrar el sismo con el timestamp más reciente
+        let maxTimestamp = 0;
+        let ultimoKey = null;
+        let ultimoData = null;
         
-        ultimoSismo = {
-          key: lastKey,
-          data: lastSismo,
-          timestamp: parseInt(lastSismo.categoria) || 0
-        };
+        for (const key of keys) {
+          const sismo = data[key];
+          const timestamp = parseInt(sismo.categoria) || 0;
+          
+          if (timestamp > maxTimestamp) {
+            maxTimestamp = timestamp;
+            ultimoKey = key;
+            ultimoData = sismo;
+          }
+        }
         
-        writeToLog('✅ Último sismo cargado desde la base de datos', 'SYSTEM');
-        mostrarUltimoSismo(lastSismo, lastKey);
-        
-        return ultimoSismo;
+        if (ultimoKey && ultimoData) {
+          ultimoSismo = {
+            key: ultimoKey,
+            data: ultimoData,
+            timestamp: maxTimestamp
+          };
+          
+          writeToLog(`✅ Historial cargado: ${keys.length} sismos encontrados`, 'SYSTEM');
+          writeToLog(`📊 Último sismo del historial:`, 'SYSTEM');
+          mostrarUltimoSismo(ultimoData, ultimoKey);
+          
+          return ultimoSismo;
+        }
       }
     }
     
     writeToLog('⚠️ No se encontraron sismos en la base de datos', 'SYSTEM');
     return null;
   } catch (error) {
-    writeToLog(`❌ Error obteniendo último sismo: ${error.message}`, 'ERROR');
+    writeToLog(`❌ Error cargando historial: ${error.message}`, 'ERROR');
     return null;
   }
 }
@@ -140,8 +160,28 @@ async function obtenerUltimoSismo() {
 function escucharNuevosSismos() {
   const messagesRef = ref(database, '/messages');
   
-  writeToLog('👂 Escuchando nuevos sismos en tiempo real...', 'SYSTEM');
+  writeToLog('👂 Configurando listener para nuevos sismos en tiempo real...', 'SYSTEM');
   writeToLog('📍 Ruta: /messages', 'SYSTEM');
+  
+  // Guardar el timestamp del último sismo ANTES de iniciar el listener
+  // Esto nos permite distinguir entre sismos históricos y nuevos
+  const timestampUltimoSismoInicial = ultimoSismo ? ultimoSismo.timestamp : 0;
+  
+  // Timestamp del momento en que se inicia el listener
+  const tiempoInicioListener = Date.now();
+  // Contador para rastrear cuántos sismos históricos se han recibido
+  let sismosHistoricosRecibidos = 0;
+  
+  // Usar un timeout razonable para marcar cuando probablemente terminó la carga inicial
+  // Firebase generalmente carga el historial en los primeros segundos
+  setTimeout(() => {
+    if (!historialCargado) {
+      historialCargado = true;
+      writeToLog(`✅ Período de carga inicial completado (${sismosHistoricosRecibidos} sismos históricos procesados)`, 'SYSTEM');
+      writeToLog('🔔 Ahora escuchando SOLO sismos nuevos en tiempo real...', 'SYSTEM');
+      writeToLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'SYSTEM');
+    }
+  }, 3000); // 3 segundos debería ser suficiente para cargar el historial
   
   // Escuchar cuando se agrega un nuevo sismo
   onChildAdded(messagesRef, (snapshot) => {
@@ -149,19 +189,64 @@ function escucharNuevosSismos() {
     const key = snapshot.key;
     const timestamp = parseInt(nuevoSismo.categoria) || 0;
     
-    // Verificar si es realmente un nuevo sismo (más reciente que el último)
-    if (!ultimoSismo || timestamp > ultimoSismo.timestamp) {
-      ultimoSismo = {
-        key: key,
-        data: nuevoSismo,
-        timestamp: timestamp
-      };
-      
-      writeToLog(`\n🔔 NUEVO SISMO DETECTADO!`, 'ALERT');
-      mostrarUltimoSismo(nuevoSismo, key);
+    // Calcular el tiempo transcurrido desde que se inició el listener
+    const tiempoTranscurrido = Date.now() - tiempoInicioListener;
+    
+    // Si el historial ya fue cargado, este es definitivamente un sismo nuevo
+    if (historialCargado) {
+      // Verificar que sea más reciente que el último conocido
+      if (timestamp > ultimoSismo.timestamp) {
+        ultimoSismo = {
+          key: key,
+          data: nuevoSismo,
+          timestamp: timestamp
+        };
+        
+        writeToLog(`\n🔔 NUEVO SISMO DETECTADO EN TIEMPO REAL!`, 'ALERT');
+        mostrarUltimoSismo(nuevoSismo, key);
+      } else {
+        writeToLog(`⚠️ Sismo recibido con timestamp menor al último conocido: ${key}`, 'WARNING');
+      }
     } else {
-      // Sismo antiguo que se está cargando inicialmente
-      writeToLog(`📦 Sismo histórico cargado: ${key}`, 'INFO');
+      // Aún en período de carga inicial
+      sismosHistoricosRecibidos++;
+      
+      // Si este sismo es más reciente que el último que teníamos ANTES de iniciar el listener,
+      // probablemente es un sismo nuevo que llegó durante la carga
+      if (timestamp > timestampUltimoSismoInicial) {
+        // Verificar si han pasado al menos 1 segundo desde el inicio del listener
+        // para evitar falsos positivos al inicio
+        if (tiempoTranscurrido > 1000) {
+          historialCargado = true;
+          ultimoSismo = {
+            key: key,
+            data: nuevoSismo,
+            timestamp: timestamp
+          };
+          writeToLog(`\n🔔 NUEVO SISMO DETECTADO (durante carga inicial)!`, 'ALERT');
+          mostrarUltimoSismo(nuevoSismo, key);
+          writeToLog('🔔 Ahora escuchando SOLO sismos nuevos en tiempo real...', 'SYSTEM');
+          writeToLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'SYSTEM');
+        } else {
+          // Actualizar el último sismo pero aún estamos en carga inicial
+          if (!ultimoSismo || timestamp > ultimoSismo.timestamp) {
+            ultimoSismo = {
+              key: key,
+              data: nuevoSismo,
+              timestamp: timestamp
+            };
+          }
+        }
+      } else {
+        // Sismo histórico, solo actualizar si es más reciente
+        if (!ultimoSismo || timestamp > ultimoSismo.timestamp) {
+          ultimoSismo = {
+            key: key,
+            data: nuevoSismo,
+            timestamp: timestamp
+          };
+        }
+      }
     }
   }, (error) => {
     writeToLog(`❌ Error escuchando nuevos sismos: ${error.message}`, 'ERROR');
@@ -187,10 +272,12 @@ async function main() {
   writeToLog('📡 Conectado a Firebase Realtime Database', 'SYSTEM');
   writeToLog('💡 Presiona Ctrl+C para detener\n', 'SYSTEM');
   
-  // Obtener el último sismo actual
-  await obtenerUltimoSismo();
+  // Cargar historial y obtener el último sismo
+  await cargarHistorialYUltimoSismo();
   
   // Escuchar nuevos sismos en tiempo real
+  // Nota: onChildAdded se disparará para todos los hijos existentes primero
+  // pero solo alertaremos después de que termine la carga inicial
   escucharNuevosSismos();
   
   // Mantener el proceso activo
