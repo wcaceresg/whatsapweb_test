@@ -769,10 +769,20 @@ app.post('/test-file-postman', upload.single('file'), async (req, res) => {
 
         // Obtener parámetros del body
         const phoneNumber = req.body.number || '51997377840';
+
         const caption = req.body.caption || 'Archivo enviado desde API';
+
+        if(phoneNumber.includes('@g.us')){
+            formattedNumber = phoneNumber.includes('@g.us') ? phoneNumber : `${phoneNumber}@g.us`;
+        }else{
+            formattedNumber = phoneNumber.includes('@c.us') ? phoneNumber : `${phoneNumber}@c.us`;
+        }
         
         // Formatear el número correctamente (debe incluir @c.us)
-        const formattedNumber = phoneNumber.includes('@c.us') ? phoneNumber : `${phoneNumber}@c.us`;
+       
+
+        // Formatear el grupo ID correctamente (debe incluir @g.us)
+    
         
         // Obtener información del archivo
         const fileBuffer = req.file.buffer;
