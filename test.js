@@ -97,8 +97,8 @@ const client = new Client({
       // executablePath: '/usr/bin/chromium-browser',
        //setChromePath('/usr/bin/google-chrome-stable'); //
       // O si tienes Google Chrome:
-       executablePath: '/usr/bin/google-chrome-stable',
-       //executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+       //executablePath: '/usr/bin/google-chrome-stable',
+       executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       // Si no especificas executablePath, Puppeteer usará el Chromium que viene con él
     }
   });
@@ -830,7 +830,7 @@ app.post('/test-file-postman', upload.single('file'), async (req, res) => {
     }
 });
 // test message -post man number and message
-app.post('/test-message-postman', async (req, res) => {
+app.post('/test-sismo-realtime', async (req, res) => {
     try {
         // Verificar si el cliente está listo
         if (!isClientReady) {
@@ -843,10 +843,20 @@ app.post('/test-message-postman', async (req, res) => {
 
         // Obtener parámetros del body
         const phoneNumber = req.body.number || '51997377840';
-        const message = req.body.message || 'Hello, this is a test message from the server';
+        const message = req.body.message || 'Sismo detectado en tiempo real';
+          
+        if(phoneNumber.includes('@g.us')){
+            formattedNumber = phoneNumber.includes('@g.us') ? phoneNumber : `${phoneNumber}@g.us`;
+        }else{
+            formattedNumber = phoneNumber.includes('@c.us') ? phoneNumber : `${phoneNumber}@c.us`;
+        }
+        
+
+
+
         
         // Formatear el número correctamente (debe incluir @c.us)
-        const formattedNumber = phoneNumber.includes('@c.us') ? phoneNumber : `${phoneNumber}@c.us`;
+        //const formattedNumber = phoneNumber.includes('@c.us') ? phoneNumber : `${phoneNumber}@c.us`;
         
         console.log(`📤 Enviando mensaje a ${formattedNumber}...`);
         

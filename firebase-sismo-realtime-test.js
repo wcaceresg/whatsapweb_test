@@ -2,7 +2,6 @@ const { initializeApp } = require('firebase/app');
 const { getDatabase, ref, onChildAdded, get, query, orderByChild, limitToLast } = require('firebase/database');
 const fs = require('fs');
 const path = require('path');
-const fetch = require('node-fetch');
 
 // Configuración de Firebase
 const config = {
@@ -33,10 +32,6 @@ if (!fs.existsSync(logsDir)) {
 let ultimoSismo = null;
 // Bandera para saber si ya terminó de cargar el historial inicial
 let historialCargado = false;
-
-// Configuración del endpoint para enviar sismos
-const API_ENDPOINT = 'http://localhost:9090/test-sismo-realtime';
-const DEFAULT_PHONE_NUMBER = '51997377840'; // Puedes cambiar esto o hacerlo configurable
 
 // Función para escribir en el log
 function writeToLog(message, eventType = 'INFO') {
@@ -71,62 +66,8 @@ function formatearSismo(sismo, key) {
   };
 }
 
-// Función para formatear el mensaje del sismo para WhatsApp
-function formatearMensajeSismo(sismoFormateado) {
-  return `🌍 *NUEVO SISMO DETECTADO*
-
-📋 *Reporte:* ${sismoFormateado.reporte}
-📅 *Fecha UTC:* ${sismoFormateado.fecha}
-🕐 *Hora UTC:* ${sismoFormateado.hora}
-📊 *Magnitud:* ${sismoFormateado.magnitud}
-📍 *Ubicación:* ${sismoFormateado.referencia}
-🌐 *Coordenadas:* Lat ${sismoFormateado.latitud}, Lon ${sismoFormateado.longitud}
-⬇️ *Profundidad:* ${sismoFormateado.profundidad} km
-💥 *Intensidad:* ${sismoFormateado.intensidad}
-🏷️ *Tipo:* ${sismoFormateado.tipoReporte}
-🆔 *ID:* ${sismoFormateado.id}`;
-}
-
-// Función para enviar el sismo al endpoint
-async function enviarSismoAlEndpoint(sismoFormateado, esNuevo = false) {
-  // Solo enviar si es un sismo nuevo en tiempo real
-  if (!esNuevo) {
-    return;
-  }
-  
-  try {
-    const mensaje = formatearMensajeSismo(sismoFormateado);
-    
-    const payload = {
-      number: DEFAULT_PHONE_NUMBER,
-      message: mensaje
-    };
-    
-    writeToLog(`📤 Enviando sismo al endpoint: ${API_ENDPOINT}`, 'HTTP');
-    
-    const response = await fetch(API_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-    
-    if (response.ok) {
-      const responseData = await response.text();
-      writeToLog(`✅ Sismo enviado exitosamente. Respuesta: ${responseData}`, 'HTTP_SUCCESS');
-    } else {
-      const errorText = await response.text();
-      writeToLog(`❌ Error al enviar sismo. Status: ${response.status}, Respuesta: ${errorText}`, 'HTTP_ERROR');
-    }
-  } catch (error) {
-    writeToLog(`❌ Error al enviar sismo al endpoint: ${error.message}`, 'HTTP_ERROR');
-    writeToLog(`Stack: ${error.stack}`, 'HTTP_ERROR');
-  }
-}
-
 // Función para mostrar el último sismo
-function mostrarUltimoSismo(sismo, key, esNuevo = false) {
+function mostrarUltimoSismo(sismo, key) {
   const sismoFormateado = formatearSismo(sismo, key);
   
   if (!sismoFormateado) {
@@ -158,11 +99,6 @@ ${separador}
   // Guardar también en formato JSON para fácil procesamiento
   const jsonData = JSON.stringify(sismoFormateado, null, 2);
   writeToLog(`\nDatos completos del sismo (JSON):\n${jsonData}\n`, 'SISMO_JSON');
-  
-  // Enviar al endpoint si es un sismo nuevo
-  if (esNuevo) {
-    enviarSismoAlEndpoint(sismoFormateado, true);
-  }
 }
 
 // Función para obtener el último sismo actual y cargar historial
@@ -205,7 +141,7 @@ async function cargarHistorialYUltimoSismo() {
           
           writeToLog(`✅ Historial cargado: ${keys.length} sismos encontrados`, 'SYSTEM');
           writeToLog(`📊 Último sismo del historial:`, 'SYSTEM');
-          mostrarUltimoSismo(ultimoData, ultimoKey, false); // false = no es nuevo, es del historial
+          mostrarUltimoSismo(ultimoData, ultimoKey);
           
           return ultimoSismo;
         }
@@ -267,7 +203,7 @@ function escucharNuevosSismos() {
         };
         
         writeToLog(`\n🔔 NUEVO SISMO DETECTADO EN TIEMPO REAL!`, 'ALERT');
-        mostrarUltimoSismo(nuevoSismo, key, true); // true = es nuevo en tiempo real
+        mostrarUltimoSismo(nuevoSismo, key);
       } else {
         writeToLog(`⚠️ Sismo recibido con timestamp menor al último conocido: ${key}`, 'WARNING');
       }
@@ -288,7 +224,7 @@ function escucharNuevosSismos() {
             timestamp: timestamp
           };
           writeToLog(`\n🔔 NUEVO SISMO DETECTADO (durante carga inicial)!`, 'ALERT');
-          mostrarUltimoSismo(nuevoSismo, key, true); // true = es nuevo en tiempo real
+          mostrarUltimoSismo(nuevoSismo, key);
           writeToLog('🔔 Ahora escuchando SOLO sismos nuevos en tiempo real...', 'SYSTEM');
           writeToLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'SYSTEM');
         } else {
@@ -366,4 +302,3 @@ async function main() {
 
 // Ejecutar
 main();
-
