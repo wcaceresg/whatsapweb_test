@@ -55,3 +55,4 @@ echo "1. Si ejecutas como root, el código ya incluye --no-sandbox"
 echo "2. Es recomendable ejecutar la aplicación con un usuario no-root"
 echo "3. Si usas PM2, asegúrate de configurarlo correctamente"
 
+

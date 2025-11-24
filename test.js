@@ -58,6 +58,17 @@ const path = require('path');
 const sessionPath = path.join(__dirname, '.wwebjs_auth', 'session-client-one');
 const sessionExists = fs.existsSync(sessionPath);
 
+// Limpiar SingletonLock si existe (evita errores al reiniciar)
+const singletonLockPath = path.join(sessionPath, 'SingletonLock');
+if (fs.existsSync(singletonLockPath)) {
+    try {
+        fs.unlinkSync(singletonLockPath);
+        console.log('🧹 Archivo SingletonLock limpiado (proceso anterior no cerrado correctamente)');
+    } catch (err) {
+        console.warn('⚠️ No se pudo eliminar SingletonLock:', err.message);
+    }
+}
+
 if (sessionExists) {
     console.log('✅ Sesión encontrada. Restaurando sesión guardada...');
 } else {
@@ -87,6 +98,7 @@ const client = new Client({
        //setChromePath('/usr/bin/google-chrome-stable'); //
       // O si tienes Google Chrome:
        executablePath: '/usr/bin/google-chrome-stable',
+       //executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       // Si no especificas executablePath, Puppeteer usará el Chromium que viene con él
     }
   });
@@ -129,15 +141,35 @@ client.on('ready', async () => {
     if (sessionExists) {
         console.log('✅ Sesión restaurada exitosamente desde:', sessionPath);
     }
-    const debugWWebVersion = await client.getWWebVersion();
-    console.log(`WWebVersion = ${debugWWebVersion}`);
+    
+    // Intentar obtener la versión de WhatsApp Web con manejo de errores
+    try {
+        const debugWWebVersion = await client.getWWebVersion();
+        console.log(`WWebVersion = ${debugWWebVersion}`);
+    } catch (error) {
+        // Este error puede ocurrir si el contexto de ejecución se destruye durante la navegación
+        // No es crítico, el cliente sigue funcionando
+        if (error.message && error.message.includes('Execution context was destroyed')) {
+            console.log('⚠️ No se pudo obtener la versión de WhatsApp Web (contexto destruido durante navegación)');
+            console.log('💡 Esto es normal durante la inicialización. El cliente sigue funcionando correctamente.');
+        } else {
+            console.warn('⚠️ Error al obtener versión de WhatsApp Web:', error.message);
+        }
+    }
 
-    client.pupPage.on('pageerror', function(err) {
-        console.log('Page error: ' + err.toString());
-    });
-    client.pupPage.on('error', function(err) {
-        console.log('Page error: ' + err.toString());
-    });
+    // Configurar manejadores de errores de página solo si la página existe
+    try {
+        if (client.pupPage) {
+            client.pupPage.on('pageerror', function(err) {
+                console.log('Page error: ' + err.toString());
+            });
+            client.pupPage.on('error', function(err) {
+                console.log('Page error: ' + err.toString());
+            });
+        }
+    } catch (error) {
+        console.warn('⚠️ No se pudieron configurar los manejadores de errores de página:', error.message);
+    }
     
 });
 
@@ -374,6 +406,8 @@ app.get('/test-message', async (req, res) => {
 
         // Obtener el número del query string o usar el por defecto
         const phoneNumber = req.query.number || '51997377840';
+        //const phoneNumber='120363401744064249';
+        //const phoneNumber = '120363401744064249';
         const message = req.query.message || 'Hello, this is a test message from the server';
         
         // Formatear el número correctamente (debe incluir @c.us)
@@ -416,6 +450,89 @@ app.get('/test-message', async (req, res) => {
                     <h1>❌ Error al enviar mensaje</h1>
                     <p>${error.message}</p>
                     <p><small>Revisa la consola para más detalles.</small></p>
+                    <a href="/">Volver al inicio</a>
+                </body>
+            </html>
+        `);
+    }
+});
+//test group - Enviar mensaje a grupo
+app.get('/test-group', async (req, res) => {
+    try {
+        // Verificar si el cliente está listo
+        if (!isClientReady) {
+            return res.status(503).send(`
+                <html>
+                    <head><title>Error</title></head>
+                    <body style="font-family: Arial; text-align: center; padding: 50px;">
+                        <h1>❌ Cliente no está listo</h1>
+                        <p>El cliente de WhatsApp aún no está conectado. Por favor espera a que se conecte.</p>
+                        <p>Revisa la consola para ver el estado de la conexión.</p>
+                        <a href="/">Volver al inicio</a>
+                    </body>
+                </html>
+            `);
+        }
+
+        // Obtener el grupo ID del query string o usar el por defecto
+        const groupId = req.query.group || '120363401744064249@g.us';
+        const message = req.query.message || 'Hello, this is a test message to the group from the server';
+        
+        // Formatear el grupo ID correctamente (debe incluir @g.us)
+        const formattedGroupId = groupId.includes('@g.us') ? groupId : `${groupId}@g.us`;
+        
+        console.log(`📤 Enviando mensaje al grupo ${formattedGroupId}...`);
+        
+        // Enviar el mensaje al grupo
+        const result = await client.sendMessage(formattedGroupId, message);
+        
+        console.log(`✅ Mensaje enviado exitosamente al grupo. ID: ${result.id._serialized}`);
+        
+        res.send(`
+            <html>
+                <head>
+                    <title>Mensaje Enviado al Grupo</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+                        .success { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 15px; border-radius: 5px; }
+                        .info { background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 10px; border-radius: 5px; margin-top: 10px; }
+                        a { display: inline-block; margin-top: 20px; padding: 10px 20px; background-color: #25D366; color: white; text-decoration: none; border-radius: 5px; }
+                        a:hover { background-color: #128C7E; }
+                    </style>
+                </head>
+                <body>
+                    <div class="success">
+                        <h2>✅ Mensaje enviado exitosamente al grupo</h2>
+                        <p><strong>Grupo:</strong> ${formattedGroupId}</p>
+                        <p><strong>Mensaje:</strong> ${message}</p>
+                        <p><strong>ID del mensaje:</strong> ${result.id._serialized}</p>
+                    </div>
+                    <div class="info">
+                        <p><small>💡 Puedes personalizar el mensaje agregando <code>?message=Tu mensaje</code> a la URL</small></p>
+                        <p><small>💡 Puedes cambiar el grupo agregando <code>?group=ID_DEL_GRUPO</code> a la URL</small></p>
+                    </div>
+                    <a href="/">Volver al inicio</a>
+                </body>
+            </html>
+        `);
+    } catch (error) {
+        console.error('❌ Error al enviar mensaje al grupo:', error);
+        res.status(500).send(`
+            <html>
+                <head>
+                    <title>Error</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 50px; }
+                        .error { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; border-radius: 5px; }
+                        a { display: inline-block; margin-top: 20px; padding: 10px 20px; background-color: #25D366; color: white; text-decoration: none; border-radius: 5px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="error">
+                        <h1>❌ Error al enviar mensaje al grupo</h1>
+                        <p><strong>Error:</strong> ${error.message}</p>
+                        <p><small>Revisa la consola para más detalles.</small></p>
+                    </div>
                     <a href="/">Volver al inicio</a>
                 </body>
             </html>
@@ -702,6 +819,52 @@ app.post('/test-file-postman', upload.single('file'), async (req, res) => {
         });
     }
 });
+// test message -post man number and message
+app.post('/test-message-postman', async (req, res) => {
+    try {
+        // Verificar si el cliente está listo
+        if (!isClientReady) {
+            return res.status(503).json({
+                success: false,
+                error: 'Cliente no está listo',
+                message: 'El cliente de WhatsApp aún no está conectado. Por favor espera a que se conecte.'
+            });
+        }
+
+        // Obtener parámetros del body
+        const phoneNumber = req.body.number || '51997377840';
+        const message = req.body.message || 'Hello, this is a test message from the server';
+        
+        // Formatear el número correctamente (debe incluir @c.us)
+        const formattedNumber = phoneNumber.includes('@c.us') ? phoneNumber : `${phoneNumber}@c.us`;
+        
+        console.log(`📤 Enviando mensaje a ${formattedNumber}...`);
+        
+        // Enviar el mensaje
+        const result = await client.sendMessage(formattedNumber, message);
+        
+        console.log(`✅ Mensaje enviado exitosamente. ID: ${result.id._serialized}`);
+
+        // Responder con JSON para API
+        res.json({
+            success: true,
+            message: 'Mensaje enviado exitosamente',
+            data: {
+                messageId: result.id._serialized,
+                to: formattedNumber,
+                message: message
+            }
+        });
+    } catch (error) {
+        console.error('❌ Error al enviar mensaje:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al enviar mensaje',
+            message: error.message,
+            details: error.stack
+        });
+    }
+});
 // Ruta raíz
 app.get('/', (req, res) => {
     const qrExists = fs.existsSync(path.join(__dirname, 'qr-code.svg'));
@@ -734,6 +897,7 @@ app.get('/', (req, res) => {
                 </div>
                 ${qrExists ? '<a href="/qr">Ver Código QR</a>' : ''}
                 ${isClientReady ? '<a href="/test-message" class="secondary">Enviar Mensaje de Prueba</a>' : ''}
+                ${isClientReady ? '<a href="/test-group" class="secondary">Enviar Mensaje a Grupo</a>' : ''}
                 ${isClientReady ? '<a href="/test-file" class="secondary">Enviar PDF de Prueba</a>' : ''}
                 ${!isClientReady ? '<div class="status warning"><p>⚠️ El cliente aún no está listo. Espera a ver "✅ READY" en la consola antes de enviar mensajes.</p></div>' : ''}
                 <p><small>Si ya escaneaste el QR, el cliente debería estar conectándose. Revisa la consola para ver el estado.</small></p>
@@ -742,14 +906,75 @@ app.get('/', (req, res) => {
     `);
 });
 
+// Función para cerrar correctamente el cliente y el servidor
+async function gracefulShutdown(signal) {
+    console.log(`\n🛑 Señal ${signal} recibida. Cerrando aplicación correctamente...`);
+    
+    try {
+        // Cerrar el cliente de WhatsApp si está inicializado
+        if (client && client.pupPage) {
+            console.log('🔌 Cerrando cliente de WhatsApp...');
+            await client.destroy();
+            console.log('✅ Cliente de WhatsApp cerrado correctamente');
+        }
+        
+        // Cerrar el servidor Express
+        if (server) {
+            server.close(() => {
+                console.log('✅ Servidor Express cerrado correctamente');
+                process.exit(0);
+            });
+        } else {
+            process.exit(0);
+        }
+    } catch (error) {
+        console.error('❌ Error durante el cierre:', error);
+        process.exit(1);
+    }
+}
+
+// Manejar señales de terminación (Ctrl+C, kill, etc.)
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+// Manejar errores no capturados
+process.on('uncaughtException', (error) => {
+    console.error('❌ Error no capturado:', error);
+    gracefulShutdown('uncaughtException');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    // Errores transitorios comunes durante la inicialización que no deberían cerrar la app
+    const isTransientError = reason && (
+        reason.message && (
+            reason.message.includes('Execution context was destroyed') ||
+            reason.message.includes('Target closed') ||
+            reason.message.includes('Session closed') ||
+            reason.message.includes('Navigation timeout')
+        )
+    );
+    
+    if (isTransientError) {
+        // Solo registrar el error pero no cerrar la aplicación
+        console.warn('⚠️ Error transitorio durante la inicialización (ignorado):', reason.message);
+        console.log('💡 El cliente continuará intentando conectarse...');
+    } else {
+        // Para otros errores, registrar y cerrar
+        console.error('❌ Promesa rechazada no manejada:', reason);
+        // No cerrar inmediatamente, solo registrar para debugging
+        // gracefulShutdown('unhandledRejection');
+    }
+});
+
 // Manejo de errores del servidor
 const PORT = 9090;
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.log('🌐 Server Express listo en puerto ' + PORT + '!');
     console.log('📡 Esperando conexión de WhatsApp...');
     console.log('💻 Aplicación de NodeJS (PID: ' + process.pid + ') iniciada');
     console.log('⏳ El cliente de WhatsApp puede tardar unos segundos en conectarse...');
     console.log('🌍 Accede a: http://localhost:' + PORT);
+    console.log('💡 Presiona Ctrl+C para cerrar correctamente la aplicación');
 }).on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
         console.error('❌ Error: El puerto ' + PORT + ' ya está en uso.');
