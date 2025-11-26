@@ -35,8 +35,10 @@ let ultimoSismo = null;
 let historialCargado = false;
 
 // Configuración del endpoint para enviar sismos
-const API_ENDPOINT = 'http://localhost:9090/test-sismo-realtime';
+// Usar 127.0.0.1 en lugar de localhost para evitar problemas con IPv6
+const API_ENDPOINT = process.env.API_ENDPOINT || 'http://127.0.0.1:9090/test-sismo-realtime';
 const DEFAULT_PHONE_NUMBER = '51997377840'; // Puedes cambiar esto o hacerlo configurable
+const HTTP_TIMEOUT = 5000; // Timeout de 5 segundos para las peticiones HTTP
 
 // Función para escribir en el log
 function writeToLog(message, eventType = 'INFO') {
@@ -104,24 +106,49 @@ async function enviarSismoAlEndpoint(sismoFormateado, esNuevo = false) {
     
     writeToLog(`📤 Enviando sismo al endpoint: ${API_ENDPOINT}`, 'HTTP');
     
-    const response = await fetch(API_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
+    // Crear un AbortController para manejar el timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), HTTP_TIMEOUT);
     
-    if (response.ok) {
-      const responseData = await response.text();
-      writeToLog(`✅ Sismo enviado exitosamente. Respuesta: ${responseData}`, 'HTTP_SUCCESS');
-    } else {
-      const errorText = await response.text();
-      writeToLog(`❌ Error al enviar sismo. Status: ${response.status}, Respuesta: ${errorText}`, 'HTTP_ERROR');
+    try {
+      const response = await fetch(API_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const responseData = await response.text();
+        writeToLog(`✅ Sismo enviado exitosamente. Respuesta: ${responseData}`, 'HTTP_SUCCESS');
+      } else {
+        const errorText = await response.text();
+        writeToLog(`❌ Error al enviar sismo. Status: ${response.status}, Respuesta: ${errorText}`, 'HTTP_ERROR');
+      }
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      // Manejar diferentes tipos de errores
+      if (fetchError.name === 'AbortError') {
+        writeToLog(`⏱️ Timeout al enviar sismo al endpoint (${HTTP_TIMEOUT}ms). El servidor no respondió a tiempo.`, 'HTTP_ERROR');
+        writeToLog(`💡 Verifica que el servidor esté corriendo en ${API_ENDPOINT}`, 'HTTP_ERROR');
+      } else if (fetchError.code === 'ECONNREFUSED') {
+        writeToLog(`❌ Conexión rechazada al endpoint: ${API_ENDPOINT}`, 'HTTP_ERROR');
+        writeToLog(`💡 El servidor no está disponible. Verifica que esté corriendo en el puerto 9090`, 'HTTP_ERROR');
+        writeToLog(`💡 Error detallado: ${fetchError.message}`, 'HTTP_ERROR');
+      } else {
+        throw fetchError; // Re-lanzar otros errores para que sean manejados por el catch externo
+      }
     }
   } catch (error) {
-    writeToLog(`❌ Error al enviar sismo al endpoint: ${error.message}`, 'HTTP_ERROR');
-    writeToLog(`Stack: ${error.stack}`, 'HTTP_ERROR');
+    writeToLog(`❌ Error inesperado al enviar sismo al endpoint: ${error.message}`, 'HTTP_ERROR');
+    if (error.stack) {
+      writeToLog(`Stack: ${error.stack}`, 'HTTP_ERROR');
+    }
   }
 }
 

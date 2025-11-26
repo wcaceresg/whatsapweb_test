@@ -10,7 +10,8 @@
     "shell": "node --experimental-repl-await ./shell.js",
     "generate-docs": "npx jsdoc --configure .jsdoc.json --verbose",
     "sismo-realtime": "node firebase-sismo-realtime.js",
-    "firebase-listener": "node firebase-listener.js"
+    "firebase-listener": "node firebase-listener.js",
+    "test-api-sismo": "node test-api-sismo.js"
   },
   "repository": {
     "type": "git",
