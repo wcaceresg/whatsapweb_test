@@ -37,7 +37,8 @@ let historialCargado = false;
 // Configuración del endpoint para enviar sismos
 // Usar 127.0.0.1 en lugar de localhost para evitar problemas con IPv6
 const API_ENDPOINT = process.env.API_ENDPOINT || 'http://127.0.0.1:9090/test-sismo-realtime';
-const DEFAULT_PHONE_NUMBER = '51997377840'; // Puedes cambiar esto o hacerlo configurable
+//const DEFAULT_PHONE_NUMBER = '51997377840'; // Puedes cambiar esto o hacerlo configurable
+const DEFAULT_PHONE_NUMBER = process.env.PHONE_NUMBER || '120363401744064249@g.us';
 const HTTP_TIMEOUT = 5000; // Timeout de 5 segundos para las peticiones HTTP
 
 // Función para escribir en el log
