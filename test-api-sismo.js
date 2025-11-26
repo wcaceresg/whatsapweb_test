@@ -2,7 +2,7 @@ const fetch = require('node-fetch');
 
 // Configuración
 let API_ENDPOINT = process.env.API_ENDPOINT || 'http://127.0.0.1:9090/test-sismo-realtime';
-const DEFAULT_PHONE_NUMBER = process.env.PHONE_NUMBER || '51997377840';
+const DEFAULT_PHONE_NUMBER = process.env.PHONE_NUMBER || '120363401744064249@g.us';
 const HTTP_TIMEOUT = 10000; // 10 segundos
 
 // Colores para la consola
