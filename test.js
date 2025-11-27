@@ -241,13 +241,13 @@ client.on('message_ack', (msg, ack) => {
 client.on('group_join', (notification) => {
     // User has joined or been added to the group.
     console.log('join', notification);
-    notification.reply('User joined.');
+    //notification.reply('User joined.');
 });
 
 client.on('group_leave', (notification) => {
     // User has left or been kicked from the group.
     console.log('leave', notification);
-    notification.reply('User left.');
+    //notification.reply('User left.');
 });
 
 client.on('group_update', (notification) => {
@@ -272,7 +272,7 @@ let rejectCalls = true;
 client.on('call', async (call) => {
     console.log('Call received, rejecting. GOTO Line 261 to disable', call);
     if (rejectCalls) await call.reject();
-    await client.sendMessage(call.from, `[${call.fromMe ? 'Outgoing' : 'Incoming'}] Phone call from ${call.from}, type ${call.isGroup ? 'group' : ''} ${call.isVideo ? 'video' : 'audio'} call. ${rejectCalls ? 'This call was automatically rejected by the script.' : ''}`);
+    //await client.sendMessage(call.from, `[${call.fromMe ? 'Outgoing' : 'Incoming'}] Phone call from ${call.from}, type ${call.isGroup ? 'group' : ''} ${call.isVideo ? 'video' : 'audio'} call. ${rejectCalls ? 'This call was automatically rejected by the script.' : ''}`);
 });
 
 
