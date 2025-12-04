@@ -98,7 +98,7 @@ const client = new Client({
        //setChromePath('/usr/bin/google-chrome-stable'); //
       // O si tienes Google Chrome:
        executablePath: '/usr/bin/google-chrome-stable',
-      // executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+       //executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       // Si no especificas executablePath, Puppeteer usará el Chromium que viene con él
     }
   });

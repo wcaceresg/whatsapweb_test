@@ -41,6 +41,9 @@ const API_ENDPOINT = process.env.API_ENDPOINT || 'http://127.0.0.1:9090/test-sis
 const DEFAULT_PHONE_NUMBER = process.env.PHONE_NUMBER || '120363401744064249@g.us';
 const HTTP_TIMEOUT = 5000; // Timeout de 5 segundos para las peticiones HTTP
 
+// Endpoint para enviar boletines de sismos
+const EARTHQUAKE_BULLETINS_ENDPOINT = process.env.EARTHQUAKE_BULLETINS_ENDPOINT || 'https://testgrd.coeseducacion.pe/api/earthquake-bulletins';
+
 // Función para escribir en el log
 function writeToLog(message, eventType = 'INFO') {
   const timestamp = new Date().toISOString();
@@ -153,6 +156,57 @@ async function enviarSismoAlEndpoint(sismoFormateado, esNuevo = false) {
   }
 }
 
+// Función para enviar el boletín de sismo al endpoint de earthquake-bulletins
+async function enviarBoletinSismo(sismoFormateado) {
+  try {
+    writeToLog(`📤 Enviando boletín de sismo al endpoint: ${EARTHQUAKE_BULLETINS_ENDPOINT}`, 'HTTP');
+    
+    // Crear un AbortController para manejar el timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), HTTP_TIMEOUT);
+    
+    try {
+      const response = await fetch(EARTHQUAKE_BULLETINS_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(sismoFormateado),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const responseData = await response.text();
+        writeToLog(`✅ Boletín de sismo enviado exitosamente. Respuesta: ${responseData}`, 'HTTP_SUCCESS');
+      } else {
+        const errorText = await response.text();
+        writeToLog(`❌ Error al enviar boletín de sismo. Status: ${response.status}, Respuesta: ${errorText}`, 'HTTP_ERROR');
+      }
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      // Manejar diferentes tipos de errores
+      if (fetchError.name === 'AbortError') {
+        writeToLog(`⏱️ Timeout al enviar boletín de sismo al endpoint (${HTTP_TIMEOUT}ms). El servidor no respondió a tiempo.`, 'HTTP_ERROR');
+        writeToLog(`💡 Verifica que el servidor esté corriendo en ${EARTHQUAKE_BULLETINS_ENDPOINT}`, 'HTTP_ERROR');
+      } else if (fetchError.code === 'ECONNREFUSED') {
+        writeToLog(`❌ Conexión rechazada al endpoint: ${EARTHQUAKE_BULLETINS_ENDPOINT}`, 'HTTP_ERROR');
+        writeToLog(`💡 El servidor no está disponible. Verifica que esté corriendo.`, 'HTTP_ERROR');
+        writeToLog(`💡 Error detallado: ${fetchError.message}`, 'HTTP_ERROR');
+      } else {
+        throw fetchError; // Re-lanzar otros errores para que sean manejados por el catch externo
+      }
+    }
+  } catch (error) {
+    writeToLog(`❌ Error inesperado al enviar boletín de sismo al endpoint: ${error.message}`, 'HTTP_ERROR');
+    if (error.stack) {
+      writeToLog(`Stack: ${error.stack}`, 'HTTP_ERROR');
+    }
+  }
+}
+
 // Función para mostrar el último sismo
 function mostrarUltimoSismo(sismo, key, esNuevo = false) {
   const sismoFormateado = formatearSismo(sismo, key);
@@ -189,7 +243,9 @@ ${separador}
   
   // Enviar al endpoint si es un sismo nuevo
   if (esNuevo) {
-    enviarSismoAlEndpoint(sismoFormateado, true);
+    //enviarSismoAlEndpoint(sismoFormateado, true);
+    // Enviar el boletín completo al endpoint de earthquake-bulletins
+    enviarBoletinSismo(sismoFormateado);
   }
 }
 

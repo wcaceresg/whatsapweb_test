@@ -2,6 +2,7 @@ const { initializeApp } = require('firebase/app');
 const { getDatabase, ref, onChildAdded, get, query, orderByChild, limitToLast } = require('firebase/database');
 const fs = require('fs');
 const path = require('path');
+const fetch = require('node-fetch');
 
 // Configuración de Firebase
 const config = {
@@ -32,6 +33,13 @@ if (!fs.existsSync(logsDir)) {
 let ultimoSismo = null;
 // Bandera para saber si ya terminó de cargar el historial inicial
 let historialCargado = false;
+
+// Configuración del endpoint para enviar sismos
+// Usar 127.0.0.1 en lugar de localhost para evitar problemas con IPv6
+const API_ENDPOINT = process.env.API_ENDPOINT || 'http://127.0.0.1:9090/test-sismo-realtime';
+//const DEFAULT_PHONE_NUMBER = '51997377840'; // Puedes cambiar esto o hacerlo configurable
+const DEFAULT_PHONE_NUMBER = process.env.PHONE_NUMBER || '120363401744064249@g.us';
+const HTTP_TIMEOUT = 5000; // Timeout de 5 segundos para las peticiones HTTP
 
 // Función para escribir en el log
 function writeToLog(message, eventType = 'INFO') {
@@ -66,8 +74,87 @@ function formatearSismo(sismo, key) {
   };
 }
 
+// Función para formatear el mensaje del sismo para WhatsApp
+function formatearMensajeSismo(sismoFormateado) {
+  return `🌍 *NUEVO SISMO DETECTADO*
+
+📋 *Reporte:* ${sismoFormateado.reporte}
+📅 *Fecha UTC:* ${sismoFormateado.fecha}
+🕐 *Hora UTC:* ${sismoFormateado.hora}
+📊 *Magnitud:* ${sismoFormateado.magnitud}
+📍 *Ubicación:* ${sismoFormateado.referencia}
+🌐 *Coordenadas:* Lat ${sismoFormateado.latitud}, Lon ${sismoFormateado.longitud}
+⬇️ *Profundidad:* ${sismoFormateado.profundidad} km
+💥 *Intensidad:* ${sismoFormateado.intensidad}
+🏷️ *Tipo:* ${sismoFormateado.tipoReporte}
+🆔 *ID:* ${sismoFormateado.id}`;
+}
+
+// Función para enviar el sismo al endpoint
+async function enviarSismoAlEndpoint(sismoFormateado, esNuevo = false) {
+  // Solo enviar si es un sismo nuevo en tiempo real
+  if (!esNuevo) {
+    return;
+  }
+  
+  try {
+    const mensaje = formatearMensajeSismo(sismoFormateado);
+    
+    const payload = {
+      number: DEFAULT_PHONE_NUMBER,
+      message: mensaje
+    };
+    
+    writeToLog(`📤 Enviando sismo al endpoint: ${API_ENDPOINT}`, 'HTTP');
+    
+    // Crear un AbortController para manejar el timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), HTTP_TIMEOUT);
+    
+    try {
+      const response = await fetch(API_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const responseData = await response.text();
+        writeToLog(`✅ Sismo enviado exitosamente. Respuesta: ${responseData}`, 'HTTP_SUCCESS');
+      } else {
+        const errorText = await response.text();
+        writeToLog(`❌ Error al enviar sismo. Status: ${response.status}, Respuesta: ${errorText}`, 'HTTP_ERROR');
+      }
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      // Manejar diferentes tipos de errores
+      if (fetchError.name === 'AbortError') {
+        writeToLog(`⏱️ Timeout al enviar sismo al endpoint (${HTTP_TIMEOUT}ms). El servidor no respondió a tiempo.`, 'HTTP_ERROR');
+        writeToLog(`💡 Verifica que el servidor esté corriendo en ${API_ENDPOINT}`, 'HTTP_ERROR');
+      } else if (fetchError.code === 'ECONNREFUSED') {
+        writeToLog(`❌ Conexión rechazada al endpoint: ${API_ENDPOINT}`, 'HTTP_ERROR');
+        writeToLog(`💡 El servidor no está disponible. Verifica que esté corriendo en el puerto 9090`, 'HTTP_ERROR');
+        writeToLog(`💡 Error detallado: ${fetchError.message}`, 'HTTP_ERROR');
+      } else {
+        throw fetchError; // Re-lanzar otros errores para que sean manejados por el catch externo
+      }
+    }
+  } catch (error) {
+    writeToLog(`❌ Error inesperado al enviar sismo al endpoint: ${error.message}`, 'HTTP_ERROR');
+    if (error.stack) {
+      writeToLog(`Stack: ${error.stack}`, 'HTTP_ERROR');
+    }
+  }
+}
+
 // Función para mostrar el último sismo
-function mostrarUltimoSismo(sismo, key) {
+function mostrarUltimoSismo(sismo, key, esNuevo = false) {
   const sismoFormateado = formatearSismo(sismo, key);
   
   if (!sismoFormateado) {
@@ -99,6 +186,11 @@ ${separador}
   // Guardar también en formato JSON para fácil procesamiento
   const jsonData = JSON.stringify(sismoFormateado, null, 2);
   writeToLog(`\nDatos completos del sismo (JSON):\n${jsonData}\n`, 'SISMO_JSON');
+  
+  // Enviar al endpoint si es un sismo nuevo
+  if (esNuevo) {
+    enviarSismoAlEndpoint(sismoFormateado, true);
+  }
 }
 
 // Función para obtener el último sismo actual y cargar historial
@@ -141,7 +233,7 @@ async function cargarHistorialYUltimoSismo() {
           
           writeToLog(`✅ Historial cargado: ${keys.length} sismos encontrados`, 'SYSTEM');
           writeToLog(`📊 Último sismo del historial:`, 'SYSTEM');
-          mostrarUltimoSismo(ultimoData, ultimoKey);
+          mostrarUltimoSismo(ultimoData, ultimoKey, false); // false = no es nuevo, es del historial
           
           return ultimoSismo;
         }
@@ -203,7 +295,7 @@ function escucharNuevosSismos() {
         };
         
         writeToLog(`\n🔔 NUEVO SISMO DETECTADO EN TIEMPO REAL!`, 'ALERT');
-        mostrarUltimoSismo(nuevoSismo, key);
+        mostrarUltimoSismo(nuevoSismo, key, true); // true = es nuevo en tiempo real
       } else {
         writeToLog(`⚠️ Sismo recibido con timestamp menor al último conocido: ${key}`, 'WARNING');
       }
@@ -224,7 +316,7 @@ function escucharNuevosSismos() {
             timestamp: timestamp
           };
           writeToLog(`\n🔔 NUEVO SISMO DETECTADO (durante carga inicial)!`, 'ALERT');
-          mostrarUltimoSismo(nuevoSismo, key);
+          mostrarUltimoSismo(nuevoSismo, key, true); // true = es nuevo en tiempo real
           writeToLog('🔔 Ahora escuchando SOLO sismos nuevos en tiempo real...', 'SYSTEM');
           writeToLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'SYSTEM');
         } else {
@@ -302,3 +394,4 @@ async function main() {
 
 // Ejecutar
 main();
+
