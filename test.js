@@ -416,7 +416,9 @@ app.get('/test-message', async (req, res) => {
         console.log(`📤 Enviando mensaje a ${formattedNumber}...`);
         
         // Enviar el mensaje
-        const result = await client.sendMessage(formattedNumber, message);
+        const result = await client.sendMessage(formattedNumber, message, {
+            sendSeen: false
+        });
         
         console.log(`✅ Mensaje enviado exitosamente. ID: ${result.id._serialized}`);
         
@@ -484,7 +486,9 @@ app.get('/test-group', async (req, res) => {
         console.log(`📤 Enviando mensaje al grupo ${formattedGroupId}...`);
         
         // Enviar el mensaje al grupo
-        const result = await client.sendMessage(formattedGroupId, message);
+        const result = await client.sendMessage(formattedGroupId, message, {
+            sendSeen: false
+        });
         
         console.log(`✅ Mensaje enviado exitosamente al grupo. ID: ${result.id._serialized}`);
         
@@ -594,7 +598,8 @@ app.get('/test-file', async (req, res) => {
         // Enviar el mensaje con el archivo como documento
         const result = await client.sendMessage(formattedNumber, media, {
             sendMediaAsDocument: true,
-            caption: caption
+            caption: caption,
+            sendSeen: false
         });
         
         console.log(`✅ Archivo enviado exitosamente. ID: ${result.id._serialized}`);
@@ -801,7 +806,8 @@ app.post('/test-file-postman', upload.single('file'), async (req, res) => {
         // Enviar el mensaje con el archivo como documento
         const result = await client.sendMessage(formattedNumber, media, {
             sendMediaAsDocument: true,
-            caption: caption
+            caption: caption,
+            sendSeen: false
         });
         
         console.log(`✅ Archivo enviado exitosamente. ID: ${result.id._serialized}`);
@@ -861,7 +867,9 @@ app.post('/test-sismo-realtime', async (req, res) => {
         console.log(`📤 Enviando mensaje a ${formattedNumber}...`);
         
         // Enviar el mensaje
-        const result = await client.sendMessage(formattedNumber, message);
+        const result = await client.sendMessage(formattedNumber, message, {
+            sendSeen: false
+        });
         
         console.log(`✅ Mensaje enviado exitosamente. ID: ${result.id._serialized}`);
 
