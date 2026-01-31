@@ -1,13 +1,18 @@
 const { Client, Location, Poll, List, Buttons, LocalAuth } = require('./index');
-const qrcode = require('qrcode-terminal');
-const qr = require('qr-image');
-const fs = require('fs');
-/*const client = new Client({
+
+const client = new Client({
     authStrategy: new LocalAuth(),
     // proxyAuthentication: { username: 'username', password: 'password' },
-
+    /**
+     * This option changes the browser name from defined in user agent to custom.
+     */
     // deviceName: 'Your custom name',
-
+    /**
+     * This option changes browser type from defined in user agent to yours. It affects the browser icon
+     * that is displayed in 'linked devices' section.
+     * Valid value are: 'Chrome' | 'Firefox' | 'IE' | 'Opera' | 'Safari' | 'Edge'.
+     * If another value is provided, the browser icon in 'linked devices' section will be gray.
+     */
     // browserName: 'Firefox',
     puppeteer: { 
         // args: ['--proxy-server=proxy-server-that-requires-authentication.example.com'],
@@ -18,19 +23,7 @@ const fs = require('fs');
     //     showNotification: true,
     //     intervalMs: 180000 // Time to renew pairing code in milliseconds, defaults to 3 minutes
     // }
-});*/
-const client = new Client({
-    puppeteer: {
-      executablePath: '/usr/bin/brave-browser-stable',
-    },
-    authStrategy: new LocalAuth({
-      clientId: "client-one"
-    }),
-    puppeteer: {
-     // headless: false,
-    }
-  });
-
+});
 
 // client initialize does not finish at ready now.
 client.initialize();
@@ -42,8 +35,6 @@ client.on('loading_screen', (percent, message) => {
 client.on('qr', async (qr) => {
     // NOTE: This event will not be fired if a session is specified.
     console.log('QR RECEIVED', qr);
-    qrcode.generate(qr, { small: true });
-    generateImage(qr);
 });
 
 client.on('code', (code) => {
@@ -532,6 +523,13 @@ client.on('message', async msg => {
         // NOTE: this action will take effect after you restart the client.
         const backgroundSync = await client.setBackgroundSync(true);
         console.log(backgroundSync);
+    } else if (msg.body === '!postStatus') {
+        await client.sendMessage('status@broadcast', 'Hello there!');
+        // send with a different style
+        await client.sendMessage('status@broadcast', 'Hello again! Looks different?', {
+            fontStyle: 1,
+            backgroundColor: '#0b3296'
+        });
     }
 });
 
@@ -706,10 +704,3 @@ client.on('vote_update', (vote) => {
     /** The vote that was affected: */
     console.log(vote);
 });
-const generateImage = (qrCode) => {
-    let qr_svg = qr.image(qrCode, { type: 'svg', margin: 4 });
-    qr_svg.pipe(require('fs').createWriteStream('qr-code.svg'));
-    console.log(`⚡ Recuerda que el QR se actualiza cada minuto ⚡'`);
-    console.log(`⚡ Actualiza F5 el navegador para mantener el mejor QR⚡`);
-    console.log('http://localhost:9000/qr');
-}

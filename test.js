@@ -94,11 +94,11 @@ const client = new Client({
         '--disable-features=IsolateOrigins,site-per-process'
       ],
       // Si tienes Chrome/Chromium instalado en el sistema, descomenta y ajusta la ruta:
-      // executablePath: '/usr/bin/chromium-browser',
+     //  executablePath: '/usr/bin/chromium-browser',
        //setChromePath('/usr/bin/google-chrome-stable'); //
       // O si tienes Google Chrome:
-       //executablePath: '/usr/bin/google-chrome-stable',
-       executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+       executablePath: '/usr/bin/google-chrome-stable',
+    //   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       // Si no especificas executablePath, Puppeteer usará el Chromium que viene con él
     }
   });
